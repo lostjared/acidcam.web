@@ -19,6 +19,8 @@ printf("OpenGL Error: %d at %s:%d\n", err, __FILE__, __LINE__); }
 #define M_PI 3.14159265358979323846
 #endif
 
+std::vector<gl::ShaderProgram> shaders;
+
 #ifdef __EMSCRIPTEN__
 const char *vSource = R"(#version 300 es
             precision highp float;
@@ -440,7 +442,9 @@ void main(void) {
 })";
 
 #else
-const char *vSource = R"(#version 330 core
+const char *vSource = R"(#version 300 es
+precision highp float;
+ core
         layout (location = 0) in vec3 aPos;
         layout (location = 1) in vec2 aTexCoord;
         out vec2 TexCoord;
@@ -449,7 +453,9 @@ const char *vSource = R"(#version 330 core
             TexCoord = aTexCoord;        
         }
     )";
-const char *fSource = R"(#version 330 core
+const char *fSource = R"(#version 300 es
+precision highp float;
+ core
         in vec2 TexCoord;
         out vec4 FragColor;
         uniform sampler2D textTexture; 
@@ -460,7 +466,9 @@ const char *fSource = R"(#version 330 core
         }
     )";
  
-const char *anifSource = R"(#version 330 core
+const char *anifSource = R"(#version 300 es
+precision highp float;
+ core
         out vec4 FragColor;
         in vec2 TexCoord;
         uniform sampler2D textTexture;
@@ -497,7 +505,9 @@ const char *anifSource = R"(#version 330 core
         }
 )";
 
-const char *anifSource2 = R"(#version 330 core
+const char *anifSource2 = R"(#version 300 es
+precision highp float;
+ core
 
 out vec4 FragColor;
 in vec2 TexCoord;
@@ -530,7 +540,9 @@ void main(void) {
 }
 )";
 
-const char *anifSource3 = R"(#version 330
+const char *anifSource3 = R"(#version 300 es
+precision highp float;
+
     in vec2 TexCoord;
     out vec4 FragColor;
     uniform sampler2D textTexture;
@@ -618,6 +630,7 @@ private:
 };
 
 int new_width = 1920, new_height = 1080;
+std::unordered_map<GLuint, std::string> shader_map;
 
 class MainWindow : public gl::GLWindow {
 public:
@@ -647,14 +660,23 @@ public:
             the_time = time;
         }
     }
+
+    std::string getShaderName() {
+        return shader_map[shaders[shader_index].id()];
+    }
+
     bool checkDone() { return done; }
     void inc() {
-        if(shader_index < MAX_SHADER-1)
+        if(shader_index < shaders.size() - 1)
             shader_index ++;
+
+        //std::cout << "Set to: " << shader_map[shaders[shader_index].id()] << "\n";
     }
+
     void dec() {
-        if(shader_index > 0) 
+        if(shader_index > 0)
             shader_index --;
+        //std::cout << "Set to: " << shader_map[shaders[shader_index].id()] << "\n";
     }
     void play() {
         playing = true;
@@ -677,7 +699,8 @@ gl::ShaderProgram shader[MAX_SHADER];
             .function("inc", &MainWindow::inc)
             .function("dec", &MainWindow::dec)
             .function("play", &MainWindow::play)
-            .function("stop", &MainWindow::stop);
+            .function("stop", &MainWindow::stop)
+            .function("getShaderName", &MainWindow::getShaderName);
     }
 
     void loadImage(const std::vector<uint8_t>& imageData) {
@@ -697,7 +720,7 @@ gl::ShaderProgram shader[MAX_SHADER];
         new_height = canvasHeight;
         sprite.initSize(canvasWidth, canvasHeight);
         main_w->text.init(canvasWidth, canvasHeight);
-        sprite.loadTexture(&shader[shader_index], "image.png", 0, 0, canvasWidth, canvasHeight);
+        sprite.loadTexture(&shaders[shader_index], "image.png", 0, 0, canvasWidth, canvasHeight);
         SDL_FreeSurface(surface);
     }
 
@@ -717,7 +740,7 @@ gl::ShaderProgram shader[MAX_SHADER];
         sprite.initSize(canvasWidth, canvasHeight);
         main_w->text.init(canvasWidth, canvasHeight);
         GLuint text = gl::createTexture(surface, true);
-        sprite.initWithTexture(&shader[shader_index], text, 0, 0, canvasWidth, canvasHeight);
+        sprite.initWithTexture(&shaders[shader_index], text, 0, 0, canvasWidth, canvasHeight);
         SDL_FreeSurface(surface);
     }
 
