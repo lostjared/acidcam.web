@@ -1,0 +1,43 @@
+
+#version 300 es
+precision highp float;
+
+
+in vec2 TexCoord;
+out vec4 FragColor;
+uniform sampler2D textTexture;
+uniform float time_f;
+uniform vec2 iResolution;
+uniform float restore_black;
+in float restore_black_value;
+
+vec3 rainbow(float t) {
+    t = fract(t);
+    float r = abs(t * 6.0 - 3.0) - 1.0;
+    float g = 2.0 - abs(t * 6.0 - 2.0);
+    float b = 2.0 - abs(t * 6.0 - 4.0);
+    return clamp(vec3(r, g, b), 0.0, 1.0);
+}
+
+void main(void) {
+    vec2 uv = TexCoord * 2.0 - 1.0;
+    uv.y *= iResolution.y / iResolution.x;
+    float angle = atan(uv.y, uv.x) + time_f * 20.0;
+
+    vec3 rainbow_FragColor = rainbow(angle / (2.0 * 3.14159));
+
+    vec4 original_FragColor = texture(textTexture, TexCoord);
+    vec3 blended_FragColor = mix(original_FragColor.rgb, rainbow_FragColor, 0.5);
+
+    vec4 FragColor_result = vec4(blended_FragColor, original_FragColor.a);
+
+    if (restore_black_value == 1.0 && texture(textTexture, TexCoord) == vec4(0, 0, 0, 1))
+        discard;
+
+    vec4 FragColor2 = texture(textTexture, TexCoord / 2);
+    vec4 FragColor3 = texture(textTexture, TexCoord / 4);
+    vec4 FragColor4 = texture(textTexture, TexCoord / 8);
+    FragColor_result = (FragColor_result * 0.4) + (FragColor2 * 0.4) + (FragColor3 * 0.4) + (FragColor4 * 0.4);
+
+    FragColor = FragColor_result;
+}
