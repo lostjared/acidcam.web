@@ -98,11 +98,13 @@ public:
         if(!file.is_open())  {
             std::cerr << "Error could not open shader index...\n";
             exit(EXIT_FAILURE);
-        }        
+        } 
+        int sindex = 0;
+
         while(!file.eof()) {
             std::string line;
             std::getline(file, line);
-            if(file) {
+            if(file && !line.empty()) {
                 std::ostringstream stream;
                 stream << "data/shaders/" << line;
                 std::cout << "Loading: " << stream.str() << "\n";
@@ -124,12 +126,9 @@ public:
                 }
                 shader_map[program.id()] = line;
                 shaders.push_back(program);
-                std::cout << "Loaded shader: " << stream.str() << "\n";
-                static int counter = 0;
-                ++counter;
-                if(counter > 100)
-                    return;
+                std::cout << sindex++ << ": Loaded shader: " << stream.str() << "\n";
             }
+
         }
    }
 
@@ -146,8 +145,8 @@ public:
 
         shaders[shader_index].setUniform("time_f", the_time);
         sprite.draw();
-        win->text.setColor({255,255,255,255});
-        win->text.printText_Solid(font, 25, 25, "Acid Cam Shaders Early Demo: https://lostsidedead.biz");
+        //win->text.setColor({255,255,255,255});
+        //win->text.printText_Solid(font, 25, 25, "Acid Cam Shaders Early Demo: https://lostsidedead.biz");
     }
     void event(gl::GLWindow *win, SDL_Event &e) override {
         

@@ -662,12 +662,12 @@ public:
     }
 
     std::string getShaderName() {
-        return shader_map[shaders[shader_index].id()];
+        return std::to_string(shader_index) + "/" + std::to_string(shader_map.size()-1) + " - " + shader_map[shaders[shader_index].id()];
     }
 
     bool checkDone() { return done; }
     void inc() {
-        if(shader_index < shaders.size() - 1)
+        if(shader_index < shaders.size()-1)
             shader_index ++;
 
         //std::cout << "Set to: " << shader_map[shaders[shader_index].id()] << "\n";
