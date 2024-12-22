@@ -16,4 +16,4 @@ With AcidCam.Web, you can:
 * Whether you are a digital artist, a designer, or simply someone looking to add a creative twist to your photos, AcidCam Web offers a seamless and enjoyable experience.
 
 
-Full version without watermark here: https://lostsidedead.biz/acdicam.web/full
+Full version without watermark here: https://lostsidedead.biz/acidcam.web/full
