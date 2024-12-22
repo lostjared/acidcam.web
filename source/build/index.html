@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GL Shader Animation</title>
-    <script src="Animation.js?v=1.2"></script>
+    <title>acidcam.web</title>
+    <script src="Animation.js?v=1.4a"></script>
     <style>
         body {
             display: flex;
@@ -84,7 +84,8 @@
             <button id="step-stop">Stop</button>
         </div>
         <button id="download-button">Download</button>
-        <input type="file" id="file-input" accept="image/*">
+        <input type="file" id="file-input" accept="image/*"><br>
+        <div id="name" style="color: white; margin-top: 10px; text-align: center;"></div>
     </div>
 
     <script>
@@ -105,6 +106,7 @@
             const fileInput = document.getElementById('file-input');
             const playShader = document.getElementById('step-play');
             const stopShader = document.getElementById('step-stop');
+            const nameval = document.getElementById('name');
             const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
             if (!gl) {
                 console.error("WebGL2 context could not be initialized.");
@@ -147,10 +149,16 @@
 
             shaderUp.addEventListener('click', () => {
                 mainWindow.dec();
+                nameval.innerHTML = mainWindow.getShaderName();
+                console.log(mainWindow.getShaderName());
+
             });
 
             shaderDown.addEventListener('click', () => {
                 mainWindow.inc();
+                nameval.innerHTML = mainWindow.getShaderName();
+                console.log(mainWindow.getShaderName());
+                
             });
 
             
