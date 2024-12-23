@@ -673,6 +673,12 @@ public:
         //std::cout << "Set to: " << shader_map[shaders[shader_index].id()] << "\n";
     }
 
+    void setIndex(int index) {
+        if(index >= 0 && index < shader_map.size()-1) {
+            shader_index = index;
+        }
+    }
+
     void dec() {
         if(shader_index > 0)
             shader_index --;
@@ -700,7 +706,8 @@ gl::ShaderProgram shader[MAX_SHADER];
             .function("dec", &MainWindow::dec)
             .function("play", &MainWindow::play)
             .function("stop", &MainWindow::stop)
-            .function("getShaderName", &MainWindow::getShaderName);
+            .function("getShaderName", &MainWindow::getShaderName)
+            .function("setIndex", &MainWindow::setIndex);
     }
 
     void loadImage(const std::vector<uint8_t>& imageData) {

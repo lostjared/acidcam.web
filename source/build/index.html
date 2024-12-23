@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>acidcam.web</title>
-    <script src="Animation.js?v=1.4a"></script>
+    <script src="Animation.js?v=1.9a"></script>
     <style>
         body {
             display: flex;
@@ -86,6 +86,9 @@
         <button id="download-button">Download</button>
         <input type="file" id="file-input" accept="image/*"><br>
         <div id="name" style="color: white; margin-top: 10px; text-align: center;"></div>
+        <select id="numberDropdown"></select>
+        <button id="processButton">Set Shader</button>   
+        <p id="output"></p>
     </div>
 
     <script>
@@ -110,6 +113,14 @@
             const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
             if (!gl) {
                 console.error("WebGL2 context could not be initialized.");
+            }
+
+            const dropdown = document.getElementById('numberDropdown');
+            for (let i = 0; i <= 276; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                dropdown.appendChild(option);
             }
 
             slider.addEventListener('input', (event) => {
@@ -161,6 +172,13 @@
                 
             });
 
+            document.getElementById('processButton').addEventListener('click', function () {
+                const selectedIndex = dropdown.selectedIndex; 
+                const selectedValue = dropdown.options[selectedIndex].value;
+                mainWindow.setIndex(selectedIndex);
+                nameval.innerHTML = mainWindow.getShaderName();
+                console.log(mainWindow.getShaderName());
+            });
             
             stepBackButton.addEventListener('click', () => {
                 const currentValue = parseInt(slider.value, 10);
@@ -177,7 +195,7 @@
                     const image = canvas.toDataURL("image/png");
                     const link = document.createElement('a');
                     link.href = image;
-                    link.download = 'canvas_image.png';
+                    link.download = 'acidcam.web.image.png';
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
