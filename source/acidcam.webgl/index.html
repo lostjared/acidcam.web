@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>acidcam.webgl</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      background-color: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 10px;
+      height: 100vh;
+    }
+    #canvas {
+      border: 1px solid #ccc;
+      max-width: 95%;
+      max-height: 45%;
+    }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      width: 100%;
+    }
+    button, input[type="file"] {
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
+      width: 150px;
+      text-align: center;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    
+    video {
+  transform: rotate(90deg);
+  width: 100%;
+  height: auto;
+}
+    
+  </style>
+</head>
+<body>
+
+  <h1>acidcam.webgl</h1>
+
+  <!-- Hidden video element for camera capture -->
+  <video
+    id="video"
+    autoplay
+    playsinline
+    style="display:none;">
+  </video>
+
+  <!-- Canvas for displaying frames -->
+  <canvas id="canvas"></canvas>
+
+  <!-- Range slider & other UI elements -->
+  <input id="time-slider" type="range" min="0" max="5000" step="1" value="0" style="display: none;">
+  <div class="button-container" style="display: none;">
+    <div>
+      <button id="shader-up">Shader Up</button>
+      <button id="shader-down">Shader Down</button>
+    </div>
+    <div>
+      <button id="step-back">Step Back</button>
+      <button id="step-forward">Step Forward</button>
+    </div>
+    <div>
+      <button id="step-play">Play</button>
+      <button id="step-stop">Stop</button>
+    </div>
+    <button id="download-button">Download</button>
+    <div id="name" style="color: white; margin-top: 10px; text-align: center;"></div>
+    <select id="numberDropdown"></select>
+    <button id="processButton">Set Shader</button>
+    <p id="output"></p>
+  </div>
+
+  <!-- 1) Load OpenCV first -->
+  <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+
+  <!-- 2) Load your Emscripten/WASM module (MyAni.js) -->
+  <script src="MyAni.js"></script>
+
+  <script>
+    /**********************************************************************
+     * Global variables
+     *********************************************************************/
+    let myAniModule = null;    // Will hold the MyAni instance
+    let mainWindow;            // If you have a MainWindow from C++
+    let loaded = false;        // For UI toggles
+    let video;                 // The hidden <video> element
+    let canvas;                // The <canvas> for displaying frames
+    let capture;               // OpenCV VideoCapture
+    let frame;                 // OpenCV Mat for frames
+
+    /**********************************************************************
+     * 1) Initialize the MyAni module
+     *********************************************************************/
+    MyAni().then((module) => {
+      console.log("MyAni module initialized!");
+      myAniModule = module; // Store module in global variable
+
+      // Example: create path, mainWindow, etc.
+      if (module.FS_createPath) {
+        module.FS_createPath('/', 'data', true, true);
+      }
+
+      try {
+        mainWindow = new module.MainWindow("", 360,640);
+        console.log("MainWindow created successfully.");
+      } catch (e) {
+        console.error("Error creating MainWindow:", e);
+      }
+
+      // The rest of your code that depends on 'module'...
+      setupUI(module);
+    });
+
+    /**********************************************************************
+     * 2) Initialize OpenCV
+     *********************************************************************/
+    cv['onRuntimeInitialized'] = () => {
+      console.log("[OpenCV] onRuntimeInitialized.");
+
+      video = document.getElementById('video');
+      canvas = document.getElementById('canvas');
+
+        
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then((stream) => {
+            const video = document.querySelector("video");
+            video.srcObject = stream;
+            video.play();
+            console.log("[OpenCV] Webcam stream started.");
+          })
+          .catch((err) => {
+            console.error("[OpenCV] getUserMedia error:", err);
+          });
+
+      // Wait for the video to have proper dimensions
+      video.addEventListener('canplay', onVideoCanPlay);
+    };
+
+    /**********************************************************************
+     * 3) Once the video can play, set up capture + Mat
+     *********************************************************************/
+    function onVideoCanPlay() {
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn("[OpenCV] Video dimensions are 0x0, retry in 100ms...");
+        setTimeout(onVideoCanPlay, 100);
+        return;
+      }
+
+      console.log("[OpenCV] Actual video size:", video.videoWidth, "x", video.videoHeight);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      video.width = video.videoWidth;
+      video.height = video.videoHeight;
+      capture = new cv.VideoCapture(video);
+      frame = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+      processFrame();
+    }
+
+    /**********************************************************************
+     * 4) The main loop: read + display + call MyAni.processPixels
+     *********************************************************************/
+    function processFrame() {
+      // Read the frame into 'frame'
+      capture.read(frame);
+
+      // Display in canvas
+      
+         // If MyAni is ready, call processPixels
+      if (loaded && myAniModule) {
+        // Convert the Mat data to a Uint8Array
+        const rawData = new Uint8Array(frame.data);
+
+        // Create a VectorU8 in MyAni
+        const dataVector = new myAniModule.VectorU8();
+        for (let i = 0; i < rawData.length; i++) {
+          dataVector.push_back(rawData[i]);
+        }
+
+        // E.g., void processPixels(std::vector<uint8_t> &data, int width, int height)
+        if (typeof myAniModule.processPixels === 'function') {
+          myAniModule.processPixels(dataVector, frame.cols, frame.rows);
+        }
+
+        // Cleanup
+        dataVector.delete();
+      }
+
+      requestAnimationFrame(processFrame);
+    }
+
+    /**********************************************************************
+     * 5) Set up your UI (sliders, buttons, etc.) once MyAni is loaded
+     *********************************************************************/
+    function setupUI(module) {
+      const slider = document.getElementById('time-slider');
+      const buttonContainer = document.querySelector('.button-container');
+      const stepBackButton = document.getElementById('step-back');
+      const stepForwardButton = document.getElementById('step-forward');
+      const downloadButton = document.getElementById('download-button');
+      const shaderUp = document.getElementById('shader-up');
+      const shaderDown = document.getElementById('shader-down');
+      const playShader = document.getElementById('step-play');
+      const stopShader = document.getElementById('step-stop');
+      const nameval = document.getElementById('name');
+      const dropdown = document.getElementById('numberDropdown');
+      const canvas = document.getElementById('canvas');
+      const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
+
+      if (!gl) {
+        console.error("WebGL2 context could not be initialized.");
+      }
+
+      mainWindow.inc();
+      mainWindow.inc();
+      mainWindow.inc();
+      // Populate dropdown 0..276
+      for (let i = 0; i <= 276; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = i;
+        dropdown.appendChild(option);
+      }
+
+      // Check when mainWindow is "done"
+      function checkIntroComplete() {
+        if (mainWindow && mainWindow.checkDone && mainWindow.checkDone()) {
+          slider.style.display = 'block';
+          buttonContainer.style.display = 'flex';
+          loaded = true;
+          return;
+        }
+        setTimeout(checkIntroComplete, 100);
+      }
+      checkIntroComplete();
+
+      // Resize slider to match canvas width
+      function resizeSlider() {
+        slider.style.width = `${Math.min(canvas.clientWidth, 400)}px`;
+      }
+      window.addEventListener('resize', resizeSlider);
+      resizeSlider();
+
+      // Slider event
+      slider.addEventListener('input', (event) => {
+        if (loaded && mainWindow && typeof mainWindow.setTime === 'function') {
+          const time = parseFloat(event.target.value);
+          mainWindow.setTime(time);
+        }
+        updateButtonState();
+      });
+
+      // Step forward/back
+      stepForwardButton.addEventListener('click', () => {
+        const currentValue = parseInt(slider.value, 10);
+        const maxValue = parseInt(slider.max, 10);
+        if (currentValue < maxValue) {
+          slider.value = currentValue + 1;
+          slider.dispatchEvent(new Event('input'));
+        }
+      });
+      stepBackButton.addEventListener('click', () => {
+        const currentValue = parseInt(slider.value, 10);
+        const minValue = parseInt(slider.min, 10);
+        if (currentValue > minValue) {
+          slider.value = currentValue - 1;
+          slider.dispatchEvent(new Event('input'));
+        }
+      });
+
+      // Shader up/down
+      shaderUp.addEventListener('click', () => {
+        if (mainWindow && typeof mainWindow.dec === 'function') {
+          mainWindow.dec();
+          nameval.innerHTML = mainWindow.getShaderName();
+          console.log(mainWindow.getShaderName());
+        }
+      });
+      shaderDown.addEventListener('click', () => {
+        if (mainWindow && typeof mainWindow.inc === 'function') {
+          mainWindow.inc();
+          nameval.innerHTML = mainWindow.getShaderName();
+          console.log(mainWindow.getShaderName());
+        }
+      });
+
+      // Set shader from dropdown
+      document.getElementById('processButton').addEventListener('click', () => {
+        const selectedIndex = dropdown.selectedIndex;
+        if (mainWindow && typeof mainWindow.setIndex === 'function') {
+          mainWindow.setIndex(selectedIndex);
+          nameval.innerHTML = mainWindow.getShaderName();
+          console.log(mainWindow.getShaderName());
+        }
+      });
+
+      // Play/Stop
+      playShader.addEventListener('click', () => {
+        if (mainWindow && typeof mainWindow.play === 'function') {
+          mainWindow.play();
+          downloadButton.disabled = true;
+        }
+      });
+      stopShader.addEventListener('click', () => {
+        if (mainWindow && typeof mainWindow.stop === 'function') {
+          mainWindow.stop();
+          downloadButton.disabled = false;
+        }
+      });
+
+           // Download button example
+      downloadButton.addEventListener('click', () => {
+        gl.finish();
+        requestAnimationFrame(() => {
+          const imageData = canvas.toDataURL("image/png");
+          const link = document.createElement('a');
+          link.href = imageData;
+          link.download = 'acidcam.web.image.png';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        });
+      });
+
+      // Helper to enable/disable step buttons based on slider
+      function updateButtonState() {
+        const currentValue = parseInt(slider.value, 10);
+        const minValue = parseInt(slider.min, 10);
+        const maxValue = parseInt(slider.max, 10);
+        stepBackButton.disabled = currentValue <= minValue;
+        stepForwardButton.disabled = currentValue >= maxValue;
+      }
+
+      // Trigger initial slider event
+      slider.dispatchEvent(new Event('input'));
+    }
+  </script>
+</body>
+</html>
+ggggggggggggggggggggggggggggggg
