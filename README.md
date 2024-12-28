@@ -1,6 +1,6 @@
 # Acid Cam Shader Animated Photo/Webcam Filters for the Web
 
-This is a HTML5/JavaScirpt/Emscripten/OpenGL ES 3/WebGL app that lets you edit and apply filters to Photos.
+This is a HTML5/JavaScirpt/Emscripten/OpenGL ES 3/WebGL app that lets you edit and apply filters to Photos/Webcam
 
 ![1222](https://github.com/user-attachments/assets/b0b11761-4aae-4311-8faa-b365232b0501)
 
