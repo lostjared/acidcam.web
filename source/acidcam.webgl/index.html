@@ -45,31 +45,23 @@
       background-color: #ccc;
       cursor: not-allowed;
     }
-    
     video {
-  transform: rotate(90deg);
-  width: 100%;
-  height: auto;
-}
-    
+      transform: rotate(90deg);
+      width: 100%;
+      height: auto;
+    }
   </style>
 </head>
 <body>
 
   <h1>acidcam.webgl</h1>
-
-  <!-- Hidden video element for camera capture -->
   <video
     id="video"
     autoplay
     playsinline
     style="display:none;">
   </video>
-
-  <!-- Canvas for displaying frames -->
   <canvas id="canvas"></canvas>
-
-  <!-- Range slider & other UI elements -->
   <input id="time-slider" type="range" min="0" max="5000" step="1" value="0" style="display: none;">
   <div class="button-container" style="display: none;">
     <div>
@@ -89,34 +81,26 @@
     <select id="numberDropdown"></select>
     <button id="processButton">Set Shader</button>
     <p id="output"></p>
+    <button id="switch-camera">Switch Camera</button>
   </div>
 
-  <!-- 1) Load OpenCV first -->
-  <script src="https://docs.opencv.org/4.x/opencv.js"></script>
-
-  <!-- 2) Load your Emscripten/WASM module (MyAni.js) -->
-  <script src="MyAni.js"></script>
+  <script src="opencv.js"></script>
+  <script src="MyAni.js?v=1.0"></script>
 
   <script>
-    /**********************************************************************
-     * Global variables
-     *********************************************************************/
-    let myAniModule = null;    // Will hold the MyAni instance
-    let mainWindow;            // If you have a MainWindow from C++
-    let loaded = false;        // For UI toggles
-    let video;                 // The hidden <video> element
-    let canvas;                // The <canvas> for displaying frames
-    let capture;               // OpenCV VideoCapture
-    let frame;                 // OpenCV Mat for frames
-
-    /**********************************************************************
-     * 1) Initialize the MyAni module
-     *********************************************************************/
-    MyAni().then((module) => {
+    let myAniModule = null;    
+    let mainWindow;            
+    let loaded = false;        
+    let video;                 
+    let canvas;                
+    let capture;               
+    let frame;                 
+    let currentStream;         
+    let usingFrontCamera = true; 
+    
+  MyAni().then((module) => {
       console.log("MyAni module initialized!");
-      myAniModule = module; // Store module in global variable
-
-      // Example: create path, mainWindow, etc.
+      myAniModule = module; 
       if (module.FS_createPath) {
         module.FS_createPath('/', 'data', true, true);
       }
@@ -127,39 +111,43 @@
       } catch (e) {
         console.error("Error creating MainWindow:", e);
       }
-
-      // The rest of your code that depends on 'module'...
       setupUI(module);
     });
 
-    /**********************************************************************
-     * 2) Initialize OpenCV
-     *********************************************************************/
     cv['onRuntimeInitialized'] = () => {
       console.log("[OpenCV] onRuntimeInitialized.");
 
       video = document.getElementById('video');
       canvas = document.getElementById('canvas');
 
-        
-        navigator.mediaDevices.getUserMedia({ video: true })
-          .then((stream) => {
-            const video = document.querySelector("video");
-            video.srcObject = stream;
-            video.play();
-            console.log("[OpenCV] Webcam stream started.");
-          })
-          .catch((err) => {
-            console.error("[OpenCV] getUserMedia error:", err);
-          });
+      getCameraStream(usingFrontCamera);
 
-      // Wait for the video to have proper dimensions
       video.addEventListener('canplay', onVideoCanPlay);
     };
 
-    /**********************************************************************
-     * 3) Once the video can play, set up capture + Mat
-     *********************************************************************/
+    function getCameraStream(front = true) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+
+      const constraints = {
+        video: {
+          facingMode: front ? 'user' : 'environment'
+        }
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then((stream) => {
+          currentStream = stream;
+          video.srcObject = stream;
+          video.play();
+          console.log("[OpenCV] Webcam stream started with facingMode:", front ? 'user' : 'environment');
+        })
+        .catch((err) => {
+          console.error("[OpenCV] getUserMedia error:", err);
+        });
+    }
+
     function onVideoCanPlay() {
       if (video.videoWidth === 0 || video.videoHeight === 0) {
         console.warn("[OpenCV] Video dimensions are 0x0, retry in 100ms...");
@@ -177,41 +165,26 @@
       processFrame();
     }
 
-    /**********************************************************************
-     * 4) The main loop: read + display + call MyAni.processPixels
-     *********************************************************************/
     function processFrame() {
-      // Read the frame into 'frame'
       capture.read(frame);
 
-      // Display in canvas
-      
-         // If MyAni is ready, call processPixels
       if (loaded && myAniModule) {
-        // Convert the Mat data to a Uint8Array
         const rawData = new Uint8Array(frame.data);
-
-        // Create a VectorU8 in MyAni
         const dataVector = new myAniModule.VectorU8();
         for (let i = 0; i < rawData.length; i++) {
           dataVector.push_back(rawData[i]);
         }
 
-        // E.g., void processPixels(std::vector<uint8_t> &data, int width, int height)
         if (typeof myAniModule.processPixels === 'function') {
           myAniModule.processPixels(dataVector, frame.cols, frame.rows);
         }
 
-        // Cleanup
         dataVector.delete();
       }
 
       requestAnimationFrame(processFrame);
     }
 
-    /**********************************************************************
-     * 5) Set up your UI (sliders, buttons, etc.) once MyAni is loaded
-     *********************************************************************/
     function setupUI(module) {
       const slider = document.getElementById('time-slider');
       const buttonContainer = document.querySelector('.button-container');
@@ -226,15 +199,20 @@
       const dropdown = document.getElementById('numberDropdown');
       const canvas = document.getElementById('canvas');
       const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
+      const switchCameraButton = document.getElementById('switch-camera');
+
+      if (!isMobile()) {
+        switchCameraButton.disabled = true;
+      }
+      switchCameraButton.addEventListener('click', () => {
+        usingFrontCamera = !usingFrontCamera;
+        getCameraStream(usingFrontCamera);
+      });
 
       if (!gl) {
         console.error("WebGL2 context could not be initialized.");
       }
 
-      mainWindow.inc();
-      mainWindow.inc();
-      mainWindow.inc();
-      // Populate dropdown 0..276
       for (let i = 0; i <= 276; i++) {
         const option = document.createElement('option');
         option.value = i;
@@ -242,7 +220,6 @@
         dropdown.appendChild(option);
       }
 
-      // Check when mainWindow is "done"
       function checkIntroComplete() {
         if (mainWindow && mainWindow.checkDone && mainWindow.checkDone()) {
           slider.style.display = 'block';
@@ -254,14 +231,12 @@
       }
       checkIntroComplete();
 
-      // Resize slider to match canvas width
       function resizeSlider() {
         slider.style.width = `${Math.min(canvas.clientWidth, 400)}px`;
       }
       window.addEventListener('resize', resizeSlider);
       resizeSlider();
 
-      // Slider event
       slider.addEventListener('input', (event) => {
         if (loaded && mainWindow && typeof mainWindow.setTime === 'function') {
           const time = parseFloat(event.target.value);
@@ -270,7 +245,6 @@
         updateButtonState();
       });
 
-      // Step forward/back
       stepForwardButton.addEventListener('click', () => {
         const currentValue = parseInt(slider.value, 10);
         const maxValue = parseInt(slider.max, 10);
@@ -288,23 +262,21 @@
         }
       });
 
-      // Shader up/down
       shaderUp.addEventListener('click', () => {
         if (mainWindow && typeof mainWindow.dec === 'function') {
-          mainWindow.dec();
+          mainWindow.inc();
           nameval.innerHTML = mainWindow.getShaderName();
           console.log(mainWindow.getShaderName());
         }
       });
       shaderDown.addEventListener('click', () => {
         if (mainWindow && typeof mainWindow.inc === 'function') {
-          mainWindow.inc();
+          mainWindow.dec();
           nameval.innerHTML = mainWindow.getShaderName();
           console.log(mainWindow.getShaderName());
         }
       });
 
-      // Set shader from dropdown
       document.getElementById('processButton').addEventListener('click', () => {
         const selectedIndex = dropdown.selectedIndex;
         if (mainWindow && typeof mainWindow.setIndex === 'function') {
@@ -314,7 +286,6 @@
         }
       });
 
-      // Play/Stop
       playShader.addEventListener('click', () => {
         if (mainWindow && typeof mainWindow.play === 'function') {
           mainWindow.play();
@@ -328,7 +299,6 @@
         }
       });
 
-           // Download button example
       downloadButton.addEventListener('click', () => {
         gl.finish();
         requestAnimationFrame(() => {
@@ -342,7 +312,6 @@
         });
       });
 
-      // Helper to enable/disable step buttons based on slider
       function updateButtonState() {
         const currentValue = parseInt(slider.value, 10);
         const minValue = parseInt(slider.min, 10);
@@ -351,10 +320,12 @@
         stepForwardButton.disabled = currentValue >= maxValue;
       }
 
-      // Trigger initial slider event
       slider.dispatchEvent(new Event('input'));
+    }
+
+    function isMobile() {
+      return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
   </script>
 </body>
 </html>
-ggggggggggggggggggggggggggggggg

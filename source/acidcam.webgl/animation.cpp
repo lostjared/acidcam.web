@@ -674,7 +674,7 @@ public:
     }
 
     void setIndex(int index) {
-        if(index >= 0 && index < shader_map.size()-1) {
+        if(index >= 0 && index < shader_map.size()) {
             shader_index = index;
         }
     }
